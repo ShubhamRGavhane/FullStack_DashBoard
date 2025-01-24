@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-const APIURL = "http://127.0.0.1:5001/fullstack-dashboard-5e7c4/us-central1/api"
+
+const APIURL = "http://127.0.0.1:5001/fullstack-dashboard-5e7c4/us-central1/api";
 
 interface User {
   id: string;
@@ -12,18 +13,19 @@ interface User {
 
 const Dashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [isMounted, setIsMounted] = useState(false); // Prevent SSR mismatches
+  const [isMounted, setIsMounted] = useState(false);
   const [newUser, setNewUser] = useState<User>({ id: "", name: "", email: "" });
-  const [editingUser, setEditingUser] = useState<User | null>(null); // For update
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState<{ [key: string]: boolean }>({}); // Track delete loading per user
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true); // Ensures component renders only on the client
+    setIsMounted(true);
 
     const fetchData = async () => {
       try {
-        const response = await axios.get(`${APIURL}/users`); // Demo API endpoint
+        const response = await axios.get(`${APIURL}/users`);
         setUsers(response.data);
       } catch (error) {
         console.error("Error fetching users:", error);
@@ -39,10 +41,8 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     try {
       const response = await axios.post(`${APIURL}/users`, newUser);
-
       setUsers([...users, response.data.user]);
-
-        setNewUser({ id: "", name: "", email: "" });
+      setNewUser({ id: "", name: "", email: "" });
     } catch (error) {
       console.error("Error adding user:", error);
     } finally {
@@ -50,20 +50,18 @@ const Dashboard: React.FC = () => {
     }
   };
 
-
   const handleUpdateUser = async (id: string) => {
     if (!editingUser || !editingUser.name || !editingUser.email) return;
 
     setLoading(true);
     try {
-      // Demo API Call for updating user
       await axios.put(`${APIURL}/users/${id}`, editingUser);
 
       const updatedUsers = users.map((user) =>
         user.id === id ? { ...user, ...editingUser } : user
       );
       setUsers(updatedUsers);
-      setEditingUser(null); // Reset editing
+      setEditingUser(null);
     } catch (error) {
       console.error("Error updating user:", error);
     } finally {
@@ -72,29 +70,45 @@ const Dashboard: React.FC = () => {
   };
 
   const handleDeleteUser = async (id: string) => {
-    setDeleteLoading((prev) => ({ ...prev, [id]: true })); // Set loading for this user
+    setDeleteLoading(true);
     try {
-      // Demo API Call for deleting user
       await axios.delete(`${APIURL}/users/${id}`);
-
-      const updatedUsers = users.filter((user) => user.id !== id);
-      setUsers(updatedUsers);
+      setUsers(users.filter((user) => user.id !== id));
     } catch (error) {
       console.error("Error deleting user:", error);
     } finally {
-      setDeleteLoading((prev) => ({ ...prev, [id]: false })); // Set loading to false for this user
+      setDeleteLoading(false);
     }
   };
 
-  if (!isMounted) return null; // Skip rendering during SSR
+  const handleDeleteSelectedUsers = async () => {
+    if (selectedUserIds.length === 0) return;
+
+    setDeleteLoading(true);
+    try {
+      await axios.post(`${APIURL}/users/delete`, { ids: selectedUserIds });
+      setUsers(users.filter((user) => !selectedUserIds.includes(user.id)));
+      setSelectedUserIds([]);
+    } catch (error) {
+      console.error("Error deleting selected users:", error);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const toggleUserSelection = (id: string) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(id) ? prev.filter((userId) => userId !== id) : [...prev, id]
+    );
+  };
+
+  if (!isMounted) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-8">
       <h1 className="text-4xl font-bold text-white mb-6 text-center">User Dashboard</h1>
       <div className="bg-white shadow-xl rounded-lg p-6">
         <h2 className="text-xl font-semibold mb-2 text-gray-800">Add New User</h2>
-
-        {/* Add User Form */}
         <div className="mb-4">
           <input
             type="text"
@@ -119,14 +133,33 @@ const Dashboard: React.FC = () => {
           </button>
         </div>
 
-        {/* Users List */}
+        <h2 className="text-xl font-semibold mb-4 text-gray-800">Users List</h2>
+        <button
+          className="bg-red-600 text-white p-2 rounded mb-4"
+          onClick={handleDeleteSelectedUsers}
+          disabled={deleteLoading}
+        >
+          {deleteLoading ? "Deleting Selected..." : "Delete Users"}
+        </button>
         {users.length > 0 ? (
           <ul>
             {users.map((user) => (
-              <li key={user.id} className="flex items-center justify-between mb-4 p-3 bg-gray-100 rounded-lg shadow-md">
-                <span className="text-gray-700">{user.name} - {user.email}</span>
+              <li
+                key={user.id}
+                className="flex items-center justify-between mb-4 p-3 bg-gray-100 rounded-lg shadow-md"
+              >
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    className="mr-3"
+                    checked={selectedUserIds.includes(user.id)}
+                    onChange={() => toggleUserSelection(user.id)}
+                  />
+                  <span className="text-gray-700">
+                    {user.name} - {user.email}
+                  </span>
+                </div>
                 <div className="space-x-2">
-                  {/* Display Edit/Delete buttons only after user creation */}
                   <button
                     className="bg-yellow-500 text-white p-2 rounded"
                     onClick={() => setEditingUser(user)}
@@ -136,9 +169,9 @@ const Dashboard: React.FC = () => {
                   <button
                     className="bg-red-500 text-white p-2 rounded"
                     onClick={() => handleDeleteUser(user.id)}
-                    disabled={deleteLoading[user.id]} // Check if this user is being deleted
+                    disabled={deleteLoading}
                   >
-                    {deleteLoading[user.id] ? "Deleting..." : "Delete"} {/* Dynamically show "Deleting..." */}
+                    {deleteLoading ? "Deleting..." : "Delete"}
                   </button>
                 </div>
               </li>
@@ -148,7 +181,6 @@ const Dashboard: React.FC = () => {
           <p className="text-gray-600">No users available.</p>
         )}
 
-        {/* Edit User Form */}
         {editingUser && (
           <div className="mt-6 bg-gray-200 p-4 rounded">
             <h3 className="text-lg font-medium mb-2">Edit User</h3>
